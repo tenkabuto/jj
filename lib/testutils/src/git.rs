@@ -69,7 +69,7 @@ pub fn clone(dest_path: &Path, repo_url: &str) -> gix::Repository {
         .unwrap();
     assert!(
         output.status.success(),
-        "git cloning failed with exit code {}:\n{}\n----- stderr -----\n{}",
+        "git cloning failed with {}:\n{}\n----- stderr -----\n{}",
         output.status,
         bstr::BString::from(output.stdout),
         bstr::BString::from(output.stderr),
@@ -349,4 +349,35 @@ impl<'a> IndexManager<'a> {
             .write(gix::index::write::Options::default())
             .unwrap();
     }
+}
+
+pub fn add_remote<'a>(repo: &'a gix::Repository, remote_name: &str, url: &str) -> gix::Remote<'a> {
+    let mut remote = repo.remote_at(url).unwrap();
+    let mut config = repo.config_snapshot().clone();
+    remote.save_as_to(remote_name, &mut config).unwrap();
+    let mut config_file = std::fs::File::create(config.meta().path.as_ref().unwrap()).unwrap();
+    config
+        .write_to_filter(&mut config_file, |section| section.meta() == config.meta())
+        .unwrap();
+    remote
+        .with_refspecs(
+            Some(format!("+refs/heads/*:refs/remotes/{remote_name}/*").as_bytes()),
+            gix::remote::Direction::Fetch,
+        )
+        .unwrap()
+}
+
+pub fn rename_remote(repo_dir: impl AsRef<Path>, original: &str, new: &str) {
+    let output = std::process::Command::new("git")
+        .current_dir(repo_dir)
+        .args(["remote", "rename", original, new])
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "git remote rename failed with {}:\n{}\n----- stderr -----\n{}",
+        output.status,
+        bstr::BString::from(output.stdout),
+        bstr::BString::from(output.stderr),
+    );
 }
