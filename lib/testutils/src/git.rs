@@ -207,7 +207,7 @@ pub fn checkout_tree_index(repo: &gix::Repository, tree_id: gix::ObjectId) {
     .unwrap();
 }
 
-fn signature() -> gix::actor::Signature {
+pub fn signature() -> gix::actor::Signature {
     gix::actor::Signature {
         name: bstr::BString::from(GIT_USER),
         email: bstr::BString::from(GIT_EMAIL),

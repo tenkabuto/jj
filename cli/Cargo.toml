@@ -108,6 +108,10 @@ test-case = { workspace = true }
 testutils = { workspace = true }
 # https://github.com/rust-lang/cargo/issues/2911#issuecomment-1483256987
 jj-cli = { path = ".", features = ["test-fakes"], default-features = false }
+gix = { workspace = true, features = [
+    "blocking-network-client",
+    "merge" ,
+] }
 
 [features]
 default = ["watchman", "git"]
