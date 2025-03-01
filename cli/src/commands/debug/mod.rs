@@ -21,6 +21,7 @@ mod reindex;
 mod revset;
 mod snapshot;
 mod template;
+mod toy_backend_init;
 mod tree;
 mod watchman;
 mod working_copy;
@@ -49,6 +50,8 @@ use self::snapshot::cmd_debug_snapshot;
 use self::snapshot::DebugSnapshotArgs;
 use self::template::cmd_debug_template;
 use self::template::DebugTemplateArgs;
+use self::toy_backend_init::cmd_debug_toy_backend_init;
+use self::toy_backend_init::DebugInitLocalArgs;
 use self::tree::cmd_debug_tree;
 use self::tree::DebugTreeArgs;
 use self::watchman::cmd_debug_watchman;
@@ -74,6 +77,7 @@ pub enum DebugCommand {
     Revset(DebugRevsetArgs),
     Snapshot(DebugSnapshotArgs),
     Template(DebugTemplateArgs),
+    InitLocal(DebugInitLocalArgs),
     Tree(DebugTreeArgs),
     #[command(subcommand)]
     Watchman(DebugWatchmanCommand),
@@ -95,6 +99,7 @@ pub fn cmd_debug(
         DebugCommand::Revset(args) => cmd_debug_revset(ui, command, args),
         DebugCommand::Snapshot(args) => cmd_debug_snapshot(ui, command, args),
         DebugCommand::Template(args) => cmd_debug_template(ui, command, args),
+        DebugCommand::InitLocal(args) => cmd_debug_toy_backend_init(ui, command, args),
         DebugCommand::Tree(args) => cmd_debug_tree(ui, command, args),
         DebugCommand::Watchman(args) => cmd_debug_watchman(ui, command, args),
         DebugCommand::WorkingCopy(args) => cmd_debug_working_copy(ui, command, args),
