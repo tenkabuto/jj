@@ -15,12 +15,15 @@ use std::io::Write;
 
 use clap_complete::ArgValueCandidates;
 use clap_complete::ArgValueCompleter;
+use jj_lib::backend::MergedTreeId;
+use jj_lib::commit::Commit;
 use jj_lib::object_id::ObjectId;
 use jj_lib::repo::Repo;
 use tracing::instrument;
 
 use crate::cli_util::CommandHelper;
 use crate::cli_util::RevisionArg;
+use crate::cli_util::WorkspaceCommandTransaction;
 use crate::command_error::user_error_with_hint;
 use crate::command_error::CommandError;
 use crate::complete;
@@ -93,50 +96,14 @@ pub(crate) fn cmd_split(
             "Use `jj new` if you want to create another empty commit.",
         ));
     }
-
     workspace_command.check_rewritable([target_commit.id()])?;
-    let matcher = workspace_command
-        .parse_file_patterns(ui, &args.paths)?
-        .to_matcher();
-    let diff_selector = workspace_command.diff_selector(
-        ui,
-        args.tool.as_deref(),
-        args.interactive || args.paths.is_empty(),
-    )?;
     let text_editor = workspace_command.text_editor()?;
     let mut tx = workspace_command.start_transaction();
     let end_tree = target_commit.tree()?;
     let base_tree = target_commit.parent_tree(tx.repo())?;
-    let format_instructions = || {
-        format!(
-            "\
-You are splitting a commit into two: {}
-
-The diff initially shows the changes in the commit you're splitting.
-
-Adjust the right side until it shows the contents you want for the first commit.
-The remainder will be in the second commit.
-",
-            tx.format_commit_summary(&target_commit)
-        )
-    };
 
     // Prompt the user to select the changes they want for the first commit.
-    let selected_tree_id =
-        diff_selector.select(&base_tree, &end_tree, matcher.as_ref(), format_instructions)?;
-    if &selected_tree_id == target_commit.tree_id() {
-        // The user selected everything from the original commit.
-        writeln!(
-            ui.warning_default(),
-            "All changes have been selected, so the second commit will be empty"
-        )?;
-    } else if selected_tree_id == base_tree.id() {
-        // The user selected nothing, so the first commit will be empty.
-        writeln!(
-            ui.warning_default(),
-            "No changes have been selected, so the first commit will be empty"
-        )?;
-    }
+    let selected_tree_id = get_user_selection(ui, &mut tx, args, &target_commit)?;
 
     // Create the first commit, which includes the changes selected by the user.
     let selected_tree = tx.repo().store().get_root_tree(&selected_tree_id)?;
@@ -243,4 +210,58 @@ The remainder will be in the second commit.
     }
     tx.finish(ui, format!("split commit {}", target_commit.id().hex()))?;
     Ok(())
+}
+
+/// Prompts the user to select the content they want in the first commit and
+/// returns the MergedTreeId corresponding to their selection.
+fn get_user_selection(
+    ui: &mut Ui,
+    tx: &mut WorkspaceCommandTransaction,
+    args: &SplitArgs,
+    target_commit: &Commit,
+) -> Result<MergedTreeId, CommandError> {
+    let format_instructions = || {
+        format!(
+            "\
+You are splitting a commit into two: {}
+
+The diff initially shows the changes in the commit you're splitting.
+
+Adjust the right side until it shows the contents you want for the first commit.
+The remainder will be in the second commit.
+",
+            tx.format_commit_summary(target_commit)
+        )
+    };
+    let matcher = tx
+        .base_workspace_helper()
+        .parse_file_patterns(ui, &args.paths)?
+        .to_matcher();
+    let diff_selector = tx.base_workspace_helper().diff_selector(
+        ui,
+        args.tool.as_deref(),
+        args.interactive || args.paths.is_empty(),
+    )?;
+    let base_tree = target_commit.parent_tree(tx.repo())?;
+    let selected_tree_id = diff_selector.select(
+        &base_tree,
+        &target_commit.tree()?,
+        matcher.as_ref(),
+        format_instructions,
+    )?;
+    if &selected_tree_id == target_commit.tree_id() {
+        // The user selected everything from the original commit.
+        writeln!(
+            ui.warning_default(),
+            "All changes have been selected, so the second commit will be empty"
+        )?;
+    } else if selected_tree_id == base_tree.id() {
+        // The user selected nothing, so the first commit will be empty.
+        writeln!(
+            ui.warning_default(),
+            "No changes have been selected, so the first commit will be empty"
+        )?;
+    }
+
+    Ok(selected_tree_id)
 }
